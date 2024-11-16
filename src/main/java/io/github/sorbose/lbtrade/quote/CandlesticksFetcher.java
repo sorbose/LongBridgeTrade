@@ -12,6 +12,8 @@ import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+
+import io.github.sorbose.lbtrade.util.CSVSerializer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -37,7 +39,13 @@ public class CandlesticksFetcher {
     }
 
     public void toCsv(String symbol, LocalDate start, LocalDate end) {
+        CSVSerializer.writeObjectsToCsv(Arrays.asList(fetch(symbol, start, end)),symbol+start+end);
+    }
 
+    public static void main(String[] args) {
+        System.out.println(System.getProperty("os.arch"));
+        CandlesticksFetcher fetcher = new CandlesticksFetcher();
+        fetcher.toConsole("TSLA.US", LocalDate.of(2024, 11, 10), LocalDate.of(2024, 11, 17));
     }
 
 }
