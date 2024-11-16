@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <!-- Appenders 定义日志的输出目标 -->
+    <Appenders>
+        <!-- 控制台输出 -->
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{ISO8601} [%t] %-5level %logger{36} - %msg%n"/>
+        </Console>
+
+        <!-- 文件输出 -->
+        <File name="File" fileName="logs/app.log">
+            <PatternLayout pattern="%d{ISO8601} [%t] %-5level %logger{36} - %msg%n"/>
+        </File>
+    </Appenders>
+
+    <!-- Loggers 定义日志记录器 -->
+    <Loggers>
+        <!-- 根日志记录器 -->
+        <Root level="debug">
+            <AppenderRef ref="Console"/>
+<!--            <AppenderRef ref="File"/>-->
+        </Root>
+
+        <!-- 可以定义特定的 logger，控制不同包/类的日志级别 -->
+        <Logger name="com.example" level="info" additivity="false">
+            <AppenderRef ref="Console"/>
+        </Logger>
+    </Loggers>
+</Configuration>
