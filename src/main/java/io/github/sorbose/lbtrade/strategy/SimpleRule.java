@@ -5,27 +5,59 @@ import com.longport.quote.Candlestick;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 
 public class SimpleRule {
+    /**实时1分钟K线，使用candlestick.high作为这一分钟的价格，
+     *             至少覆盖observationMinute中最久远的时间点*/
+    HashMap<String, List<Candlestick>> candlesticksMap;
+    /**观测点*/
+    int[] observationMinute;
+    /** 与观测点对应，97表示是原价的97%，下降了3%*/
+    BigDecimal[] percentage;
+    /**至少应该有 `conditionNum`个观测点达到预期下降标准*/
+    int conditionNum;
+    /**价格差，可正可负，只有当每股现价大于buyingPrice+gapPrice时才被视为盈利*/
+    BigDecimal gapPrice;
+    /**97表示在盈利状态下允许有3%的回撤*/
+    BigDecimal winPercentage;
+    /**98表示在亏损状态下允许有2%的回撤*/
+    BigDecimal losePercentage;
+
+    public SimpleRule(HashMap<String, List<Candlestick>> candlesticksMap, int[] observationMinute, BigDecimal[] percentage, int conditionNum, BigDecimal gapPrice, BigDecimal winPercentage, BigDecimal losePercentage) {
+        this.candlesticksMap = candlesticksMap;
+        this.observationMinute = observationMinute;
+        this.percentage = percentage;
+        this.conditionNum = conditionNum;
+        this.gapPrice = gapPrice;
+        this.winPercentage = winPercentage;
+        this.losePercentage = losePercentage;
+        for(List<Candlestick> list : candlesticksMap.values()) {
+            list.sort((a, b)->a.getTimestamp().compareTo(b.getTimestamp()));
+        }
+    }
+
     /**
      * 使用简单的浮动止盈止损策略决定是否应该买入股票。希望股票现在的价格，
      * 和observationMinute[i]分钟之前相比，下降了dropPercentage[i]
-     * @param data 实时1分钟K线，使用candlestick.high作为这一分钟的价格，
-     *             至少覆盖observationMinute中最久远的时间点
+     * @param symbol 股票标识
      * @param lastPrice 股票实时现价
-     * @param observationMinute 观测点
-     * @param percentage 97表示是原价的97%，下降了3%
-     * @param conditionNum 至少应该有 `conditionNum`个观测点达到预期下降标准
+     * @param now 与lastPrice相对应的时间
      * @return true表示现在应该买入股票
      */
-    boolean shouldBuy(List<Candlestick> data, BigDecimal lastPrice,
-                      int[] observationMinute, BigDecimal[] percentage, int conditionNum){
-        data.sort((a,b)->b.getTimestamp().compareTo(a.getTimestamp()));
+    public boolean shouldBuy(String symbol, BigDecimal lastPrice, LocalDateTime now) {
+        List<Candlestick> candlesticks = candlesticksMap.get(symbol);
+        int nowIndex = Collections.binarySearch(candlesticks, null, (a, b) -> a.getTimestamp().toLocalDateTime().compareTo(now));
+        if (nowIndex < 0) {
+            nowIndex = -nowIndex - 2;
+        }
         int realConditionNum = 0;
         for(int i=0;i<observationMinute.length;i++){
-            if(lastPrice.compareTo(data.get(observationMinute[i]).getHigh().multiply(percentage[i])) < 0){
+            if(lastPrice.compareTo(candlesticks.get(nowIndex-observationMinute[i]).getHigh().
+                    multiply(percentage[i]).divide(BigDecimal.valueOf(100),3,RoundingMode.HALF_UP)) < 0){
                 realConditionNum++;
             }
         }
@@ -38,17 +70,20 @@ public class SimpleRule {
      * 在盈利状态下，如果lastPrice小于highestPrice乘winPercentage，或者在亏损状态下，lastPrice小于highestPrice乘losePercentage
      * 则应该卖出股票止损
      * @param buyingPrice 股票的成本价
-     * @param highestPrice 最近一次买入股票后的最高价
-     * @param lastPrice 股票的现价
-     * @param gapPrice 价格差，可正可负，只有当股票现价大于buyingPrice+gapPrice时才被视为盈利
-     * @param winPercentage 97表示在盈利状态下允许有3%的回撤
-     * @param losePercentage 98表示在亏损状态下允许有2%的回撤
+     * @param symbol 股票标识
+     * @param lastPrice 股票实时现价
+     * @param buyingTime 股票最近一次购买时间
+     * @param now 与lastPrice相对应的时间
      * @return true表示应该卖出股票
      */
-    boolean shouldSell(BigDecimal buyingPrice, BigDecimal highestPrice, BigDecimal lastPrice,
-                       BigDecimal gapPrice, BigDecimal winPercentage, BigDecimal losePercentage){
+    public boolean shouldSell(String symbol, BigDecimal buyingPrice, LocalDateTime buyingTime, BigDecimal lastPrice, LocalDateTime now){
         BigDecimal basePrice = buyingPrice.add(gapPrice);
         boolean isProfit = lastPrice.compareTo(basePrice) > 0;
+        List<Candlestick> candlesticks = candlesticksMap.get(symbol);
+        BigDecimal highestPrice =  candlesticks.stream().filter(c->{
+            LocalDateTime t=c.getTimestamp().toLocalDateTime();
+            return t.isBefore(now)&& (t.isAfter(buyingTime)||t.isEqual(buyingTime));
+        }).max(Comparator.comparing(Candlestick::getHigh)).get().getHigh();
 
         // 计算盈利状态下的止损界限
         BigDecimal profitThreshold = highestPrice.multiply(
