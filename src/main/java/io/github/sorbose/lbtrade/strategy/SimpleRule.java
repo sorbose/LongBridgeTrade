@@ -10,7 +10,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 
-public class SimpleRule {
+public class SimpleRule implements RuleStrategy {
     /**实时1分钟K线，使用candlestick.high作为这一分钟的价格，
      *             至少覆盖observationMinute中最久远的时间点*/
     HashMap<String, List<Candlestick>> candlesticksMap;
@@ -48,6 +48,7 @@ public class SimpleRule {
      * @param now 与lastPrice相对应的时间
      * @return true表示现在应该买入股票
      */
+    @Override
     public boolean shouldBuy(String symbol, BigDecimal lastPrice, LocalDateTime now) {
         List<Candlestick> candlesticks = candlesticksMap.get(symbol);
         int nowIndex = Collections.binarySearch(candlesticks, null, (a, b) -> a.getTimestamp().toLocalDateTime().compareTo(now));
@@ -57,6 +58,21 @@ public class SimpleRule {
         int realConditionNum = 0;
         for(int i=0;i<observationMinute.length;i++){
             if(lastPrice.compareTo(candlesticks.get(nowIndex-observationMinute[i]).getHigh().
+                    multiply(percentage[i]).divide(BigDecimal.valueOf(100),3,RoundingMode.HALF_UP)) < 0){
+                realConditionNum++;
+            }
+        }
+        return realConditionNum >= conditionNum;
+    }
+    /**
+     * @param candlesticks 时间升序（从旧到新）的最新K线数据，请传入尽量少的数据，以减少计算量
+     * @
+     */
+    public boolean shouldBuy(Candlestick[] candlesticks, String symbol, BigDecimal lastPrice) {
+        int realConditionNum = 0;
+        int length = candlesticks.length;
+        for(int i=0;i<observationMinute.length;i++){
+            if(lastPrice.compareTo(candlesticks[length-observationMinute[i]].getHigh().
                     multiply(percentage[i]).divide(BigDecimal.valueOf(100),3,RoundingMode.HALF_UP)) < 0){
                 realConditionNum++;
             }
@@ -76,6 +92,7 @@ public class SimpleRule {
      * @param now 与lastPrice相对应的时间
      * @return true表示应该卖出股票
      */
+    @Override
     public boolean shouldSell(String symbol, BigDecimal buyingPrice, LocalDateTime buyingTime, BigDecimal lastPrice, LocalDateTime now){
         BigDecimal basePrice = buyingPrice.add(gapPrice);
         boolean isProfit = lastPrice.compareTo(basePrice) > 0;
@@ -92,6 +109,34 @@ public class SimpleRule {
         BigDecimal lossThreshold = highestPrice.multiply(
                 losePercentage.divide(new BigDecimal("100"), 3, RoundingMode.HALF_UP));
 
+        // 如果是盈利状态，检查是否满足止损条件
+        if (isProfit) {
+            return lastPrice.compareTo(profitThreshold) < 0;  // 如果现价低于盈利止损阈值，则卖出
+        } else {
+            // 如果是亏损状态，检查是否满足止损条件
+            return lastPrice.compareTo(lossThreshold) < 0;
+        }
+    }
+
+    /**
+     * @param candlesticks 时间升序（从旧到新）的最新K线数据，请传入尽量少的数据，以减少计算量
+     * @
+     */
+    public boolean shouldSell(Candlestick[] candlesticks, BigDecimal buyingPrice, LocalDateTime buyingTime, String symbol, BigDecimal lastPrice){
+        BigDecimal basePrice = buyingPrice.add(gapPrice);
+        boolean isProfit = lastPrice.compareTo(basePrice) > 0;
+        BigDecimal highestPrice = BigDecimal.ZERO;
+        for(Candlestick c : candlesticks){
+            if(c.getTimestamp().toLocalDateTime().isAfter(buyingTime)&&c.getHigh().compareTo(highestPrice)>0){
+                highestPrice = c.getHigh();
+            }
+        }
+        // 计算盈利状态下的止损界限
+        BigDecimal profitThreshold = highestPrice.multiply(
+                winPercentage.divide(new BigDecimal("100"), 3, RoundingMode.HALF_UP));
+        // 计算亏损状态下的止损界限
+        BigDecimal lossThreshold = highestPrice.multiply(
+                losePercentage.divide(new BigDecimal("100"), 3, RoundingMode.HALF_UP));
         // 如果是盈利状态，检查是否满足止损条件
         if (isProfit) {
             return lastPrice.compareTo(profitThreshold) < 0;  // 如果现价低于盈利止损阈值，则卖出

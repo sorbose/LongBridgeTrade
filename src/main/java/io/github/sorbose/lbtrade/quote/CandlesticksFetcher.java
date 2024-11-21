@@ -68,7 +68,7 @@ public class CandlesticksFetcher {
         logger.info("start");
         CandlesticksFetcher fetcher = new CandlesticksFetcher();
         long startTime = System.currentTimeMillis();
-        fetcher.toCsv("TSLQ.US",
+        fetcher.toCsv("TSLL.US",
                 LocalDate.of(2023, 12, 4).atStartOfDay());
         long endTime = System.currentTimeMillis();
         logger.info("end");

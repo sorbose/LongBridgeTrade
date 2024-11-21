@@ -20,8 +20,8 @@ public class SimpleRuleSimulator extends AbstractSimulator {
     BigDecimal gapPrice;
     BigDecimal winPercentage;
     BigDecimal losePercentage;
-    private static final BigDecimal fixedBuyFee = new BigDecimal("1.1");
-    private static final BigDecimal fixedSellFee = new BigDecimal("1.1");
+    private static final BigDecimal fixedBuyFee = new BigDecimal("1.01");
+    private static final BigDecimal fixedSellFee = new BigDecimal("1.01");
 
     public SimpleRuleSimulator(String[] symbols, String currency, BigDecimal initCash, LocalDateTime beginTime, LocalDateTime endTime, HashMap<String, List<Candlestick>> candlesticksMap,
                                int[] observationMinute, BigDecimal[] percentage, int conditionNum, BigDecimal gapPrice, BigDecimal winPercentage, BigDecimal losePercentage) {
@@ -36,12 +36,12 @@ public class SimpleRuleSimulator extends AbstractSimulator {
 
     @Override
     protected BigDecimal getBuyFee(Market market, BigDecimal quantity, BigDecimal unitCost) {
-        return fixedBuyFee;
+        return fixedBuyFee.add(quantity.multiply(unitCost).multiply(new BigDecimal("0.001")));
     }
 
     @Override
     protected BigDecimal getSellFee(Market market, BigDecimal quantity, BigDecimal unitCost) {
-        return fixedSellFee;
+        return fixedSellFee.add(quantity.multiply(unitCost).multiply(new BigDecimal("0.001")));
     }
 
     @Override
@@ -131,7 +131,7 @@ public class SimpleRuleSimulator extends AbstractSimulator {
     }
 
     public static void main(String[] args) {
-        String[] symbols = new String[]{"TSLL"};
+        String[] symbols = new String[]{"TSLQ"};
         String[] inPaths = Arrays.stream(symbols).map(s -> CandlestickLoader.symbolToPath.get(s)).toArray(String[]::new);
         CandlestickLoader candlestickLoader = new CandlestickLoader();
         HashMap<String, List<Candlestick>> candlesticksMap =
@@ -154,7 +154,7 @@ public class SimpleRuleSimulator extends AbstractSimulator {
                 symbols,
                 "USD",
                 new BigDecimal(2000),
-                LocalDateTime.of(2024, 11, 15, 0, 0),
+                LocalDateTime.of(2024, 11, 17, 0, 0),
                 LocalDateTime.now(),
                 candlesticksMap,
                 new int[]{30},
