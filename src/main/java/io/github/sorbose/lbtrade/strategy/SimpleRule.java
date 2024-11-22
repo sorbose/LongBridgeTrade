@@ -17,9 +17,11 @@ public class SimpleRule implements RuleStrategy {
     HashMap<String, List<Candlestick>> candlesticksMap;
     /**观测点*/
     int[] observationMinute;
-    /** 与观测点对应，97表示是原价的97%，下降了3%*/
+    /** 与观测点对应，97表示是原价的97%，价格差3%*/
     BigDecimal[] percentage;
-    /**至少应该有 `conditionNum`个观测点达到预期下降标准*/
+    /**为1表示，实际价格比预期（observationMinute[i]）更高，才算符合条件*/
+    int[] higherThanExpected;
+    /**至少应该有 `conditionNum`个观测点达到预期标准*/
     int conditionNum;
     /**价格差，可正可负，只有当每股现价大于buyingPrice+gapPrice时才被视为盈利*/
     BigDecimal gapPrice;
@@ -28,7 +30,8 @@ public class SimpleRule implements RuleStrategy {
     /**98表示在亏损状态下允许有2%的回撤*/
     BigDecimal losePercentage;
 
-    public SimpleRule(HashMap<String, List<Candlestick>> candlesticksMap, int[] observationMinute, BigDecimal[] percentage, int conditionNum, BigDecimal gapPrice, BigDecimal winPercentage, BigDecimal losePercentage) {
+    public SimpleRule(HashMap<String, List<Candlestick>> candlesticksMap, int[] observationMinute, BigDecimal[] percentage, int[] higherThanExpected,
+                      int conditionNum, BigDecimal gapPrice, BigDecimal winPercentage, BigDecimal losePercentage) {
         this.candlesticksMap = candlesticksMap;
         this.observationMinute = observationMinute;
         this.percentage = percentage;
@@ -36,6 +39,7 @@ public class SimpleRule implements RuleStrategy {
         this.gapPrice = gapPrice;
         this.winPercentage = winPercentage;
         this.losePercentage = losePercentage;
+        this.higherThanExpected = higherThanExpected;
         for(List<Candlestick> list : candlesticksMap.values()) {
             list.sort((a, b)->a.getTimestamp().compareTo(b.getTimestamp()));
         }
@@ -58,13 +62,18 @@ public class SimpleRule implements RuleStrategy {
         }
         int realConditionNum = 0;
         for(int i=0;i<observationMinute.length;i++){
-            if(lastPrice.compareTo(candlesticks.get(nowIndex-observationMinute[i]).getHigh().
-                    multiply(percentage[i]).divide(BigDecimal.valueOf(100),3,RoundingMode.HALF_UP)) < 0){
+            if(lastPrice.compareTo(getBuyBoundPrice(candlesticks, nowIndex, i))*higherThanExpected[i] > 0){
                 realConditionNum++;
             }
         }
         return realConditionNum >= conditionNum;
     }
+
+    public BigDecimal getBuyBoundPrice(List<Candlestick> candlesticks, int nowIndex, int i) {
+        return candlesticks.get(nowIndex - observationMinute[i]).getHigh().
+                multiply(percentage[i]).divide(BigDecimal.valueOf(100), 3, RoundingMode.HALF_UP);
+    }
+
     /**
      * @param candlesticks 时间升序（从旧到新）的最新K线数据，请传入尽量少的数据，以减少计算量
      * @
@@ -74,7 +83,7 @@ public class SimpleRule implements RuleStrategy {
         int length = candlesticks.length;
         for(int i=0;i<observationMinute.length;i++){
             if(lastPrice.compareTo(candlesticks[length-observationMinute[i]].getHigh().
-                    multiply(percentage[i]).divide(BigDecimal.valueOf(100),3,RoundingMode.HALF_UP)) < 0){
+                    multiply(percentage[i]).divide(BigDecimal.valueOf(100),3,RoundingMode.HALF_UP))*higherThanExpected[i] > 0){
                 realConditionNum++;
             }
         }
@@ -121,7 +130,6 @@ public class SimpleRule implements RuleStrategy {
 
     /**
      * @param candlesticks 时间升序（从旧到新）的最新K线数据，请传入尽量少的数据，以减少计算量
-     * @
      */
     public boolean shouldSell(Candlestick[] candlesticks, BigDecimal buyingPrice, OffsetDateTime buyingTimeUTC, String symbol, BigDecimal lastPrice){
         BigDecimal basePrice = buyingPrice.add(gapPrice);

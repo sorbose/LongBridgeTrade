@@ -63,12 +63,11 @@ public class CandlesticksFetcher {
     }
 
     public static void main(String[] args) {
-        System.out.println(System.getenv("LONGPORT_APP_KEY"));
         logger.debug(System.getProperty("os.arch"));
         logger.info("start");
         CandlesticksFetcher fetcher = new CandlesticksFetcher();
         long startTime = System.currentTimeMillis();
-        fetcher.toCsv("TSLL.US",
+        fetcher.toCsv("YANG.US",
                 LocalDate.of(2023, 12, 4).atStartOfDay());
         long endTime = System.currentTimeMillis();
         logger.info("end");

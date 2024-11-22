@@ -55,19 +55,19 @@ public class Agent {
         return new Trader(expireSecond, timeoutSecond, cashBuyAvailableRatio, marginBuyAvailableRatio, minRemainFinanceAmount);
     }
 
-    private RuleStrategy initSimpleRule(int[] observationMinute, BigDecimal[] percentage, int conditionNum, BigDecimal gapPrice, BigDecimal winPercentage, BigDecimal losePercentage) {
-        return new SimpleRule(new HashMap<>(),
-                observationMinute, percentage, conditionNum, gapPrice, winPercentage, losePercentage);
+    private RuleStrategy initSimpleRule(int[] observationMinute, BigDecimal[] percentage, int[] highThanExpected , int conditionNum, BigDecimal gapPrice, BigDecimal winPercentage, BigDecimal losePercentage) {
+        return new SimpleRule(new HashMap<>(), observationMinute, percentage, highThanExpected,
+                conditionNum, gapPrice, winPercentage, losePercentage);
     }
 
     public Agent(String[] symbols, BigDecimal cashBuyAvailableRatio, BigDecimal marginBuyAvailableRatio,
                  BigDecimal minRemainFinanceAmount,
-                 int[] observationMinute, BigDecimal[] percentage, int conditionNum,
+                 int[] observationMinute, BigDecimal[] percentage, int[] higherThanExpected, int conditionNum,
                  BigDecimal simpleRuleProfitGapPrice, BigDecimal simpleRuleWinPercentage, BigDecimal simpleRuleLosePercentage,
                  BigDecimal buyOrderPriceGapTenThousandPercent, BigDecimal sellOrderPriceGapTenThousandPercent,
                  BigDecimal minBuyQuantity,
                  int submittedOrderExpireTimeSec, int getByNetworkTimeoutSecond) {
-        this.strategy = initSimpleRule(observationMinute, percentage, conditionNum, simpleRuleProfitGapPrice, simpleRuleWinPercentage, simpleRuleLosePercentage);
+        this.strategy = initSimpleRule(observationMinute, percentage, higherThanExpected, conditionNum, simpleRuleProfitGapPrice, simpleRuleWinPercentage, simpleRuleLosePercentage);
         this.quoter = initQuoter(symbols, submittedOrderExpireTimeSec, getByNetworkTimeoutSecond);
         this.trader = initTrader(submittedOrderExpireTimeSec, getByNetworkTimeoutSecond, cashBuyAvailableRatio, marginBuyAvailableRatio, minRemainFinanceAmount);
         this.buyGapRatio = buyOrderPriceGapTenThousandPercent.divide(BigDecimal.valueOf(10000), 6, RoundingMode.HALF_UP);
@@ -211,23 +211,24 @@ public class Agent {
 
     // IMPORTANT: 直接进行交易，真实环境请小心使用
     public static void main(String[] args) throws InterruptedException {
-        String[] symbols = new String[]{"TSLL.US","TSLQ.US"};
+        String[] symbols = new String[]{"TSLL.US", "TSLQ.US"};
         BigDecimal cashBuyAvailableRatio = new BigDecimal("0.015");
         BigDecimal marginBuyAvailableRatio = new BigDecimal("0.005");
         BigDecimal minRemainFinanceAmount = new BigDecimal("408000");
-        int[] observationMinute=new int[]{30};
-        BigDecimal[] percentage=new BigDecimal[]{new BigDecimal("98")};
-        int conditionNum=1;
+        int[] observationMinute=new int[]{25, 5};
+        BigDecimal[] percentage=new BigDecimal[]{new BigDecimal("98.75"), new BigDecimal("99.25")};
+        int[] higherThanExpected = new int[]{-1, 1};
+        int conditionNum=2;
         BigDecimal simpleRuleProfitGapPrice=new BigDecimal("0.1");
-        BigDecimal simpleRuleWinPercentage=new BigDecimal("98");
-        BigDecimal simpleRuleLosePercentage=new BigDecimal("99");
-        BigDecimal buyOrderPriceGapTenThousandPercent=new BigDecimal("7");
-        BigDecimal sellOrderPriceGapTenThousandPercent=new BigDecimal("7");
+        BigDecimal simpleRuleWinPercentage=new BigDecimal("99.5");
+        BigDecimal simpleRuleLosePercentage=new BigDecimal("99.5");
+        BigDecimal buyOrderPriceGapTenThousandPercent=new BigDecimal("6");
+        BigDecimal sellOrderPriceGapTenThousandPercent=new BigDecimal("6");
         BigDecimal minBuyQuantity=new BigDecimal("3");
         int submittedOrderExpireTimeSec=70;
         int getByNetworkTimeoutSecond=30;
         Agent agent=new Agent(symbols, cashBuyAvailableRatio, marginBuyAvailableRatio,
-                minRemainFinanceAmount,observationMinute, percentage, conditionNum,
+                minRemainFinanceAmount,observationMinute, percentage, higherThanExpected, conditionNum,
                 simpleRuleProfitGapPrice, simpleRuleWinPercentage, simpleRuleLosePercentage,
                 buyOrderPriceGapTenThousandPercent, sellOrderPriceGapTenThousandPercent,
                 minBuyQuantity,
