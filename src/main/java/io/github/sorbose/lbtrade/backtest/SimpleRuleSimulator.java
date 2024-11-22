@@ -36,12 +36,12 @@ public class SimpleRuleSimulator extends AbstractSimulator {
 
     @Override
     protected BigDecimal getBuyFee(Market market, BigDecimal quantity, BigDecimal unitCost) {
-        return fixedBuyFee.add(quantity.multiply(unitCost).multiply(new BigDecimal("0.001")));
+        return fixedBuyFee.add(quantity.multiply(unitCost).multiply(new BigDecimal("0.0015")));
     }
 
     @Override
     protected BigDecimal getSellFee(Market market, BigDecimal quantity, BigDecimal unitCost) {
-        return fixedSellFee.add(quantity.multiply(unitCost).multiply(new BigDecimal("0.001")));
+        return fixedSellFee.add(quantity.multiply(unitCost).multiply(new BigDecimal("0.0015")));
     }
 
     @Override

@@ -22,6 +22,9 @@ import java.time.*;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class Agent {
     Quoter quoter;
@@ -40,6 +43,7 @@ public class Agent {
             new ThreadPoolExecutor.DiscardOldestPolicy() // 拒绝策略
     );
     private static final Logger logger = LogManager.getLogger(Agent.class);
+    private final ConcurrentHashMap<String, AtomicBoolean> symbolLocks = new ConcurrentHashMap<>();
 
     private Quoter initQuoter(String[] symbols, int expireSecond, int timeoutSecond) {
         return new Quoter(symbols, expireSecond, timeoutSecond);
@@ -70,6 +74,10 @@ public class Agent {
         this.sellGapRatio = sellOrderPriceGapTenThousandPercent.divide(BigDecimal.valueOf(10000), 6, RoundingMode.HALF_UP);
         this.minBuyQuantity = minBuyQuantity;
         this.assetManager = new AssetManager();
+    }
+
+    private AtomicBoolean getLockForProduct(String productId) {
+        return symbolLocks.computeIfAbsent(productId, id -> new AtomicBoolean(false));
     }
 
     // TODO: 丢弃来不及处理的数据
@@ -175,9 +183,16 @@ public class Agent {
                 if(duration.toMinutes()>3){
                     logger.warn("Delayed candlesticks time (UTC+0) {}, duration {} min", latestCandlestickTime, duration.toMinutes());
                 }
-                String orderId= buyOrSellSync(symbol, lastDone, candlesticks);
-                if(orderId!=null){
-                    logger.info("orderId: {}", orderId);
+                AtomicBoolean lock = getLockForProduct(symbol);
+                if(lock.compareAndSet(false, true)){
+                    try {
+                        String orderId= buyOrSellSync(symbol, lastDone, candlesticks);
+                        if(orderId!=null){
+                            logger.info("orderId: {}", orderId);
+                        }
+                    }finally {
+                        lock.set(false);
+                    }
                 }
             }
         } catch (OpenApiException | ExecutionException | InterruptedException | TimeoutException e) {
@@ -201,11 +216,11 @@ public class Agent {
         BigDecimal marginBuyAvailableRatio = new BigDecimal("0.005");
         BigDecimal minRemainFinanceAmount = new BigDecimal("408000");
         int[] observationMinute=new int[]{30};
-        BigDecimal[] percentage=new BigDecimal[]{new BigDecimal("98.5")};
+        BigDecimal[] percentage=new BigDecimal[]{new BigDecimal("98")};
         int conditionNum=1;
         BigDecimal simpleRuleProfitGapPrice=new BigDecimal("0.1");
-        BigDecimal simpleRuleWinPercentage=new BigDecimal("98.5");
-        BigDecimal simpleRuleLosePercentage=new BigDecimal("99.5");
+        BigDecimal simpleRuleWinPercentage=new BigDecimal("98");
+        BigDecimal simpleRuleLosePercentage=new BigDecimal("99");
         BigDecimal buyOrderPriceGapTenThousandPercent=new BigDecimal("7");
         BigDecimal sellOrderPriceGapTenThousandPercent=new BigDecimal("7");
         BigDecimal minBuyQuantity=new BigDecimal("3");
@@ -218,17 +233,17 @@ public class Agent {
                 minBuyQuantity,
                 submittedOrderExpireTimeSec, getByNetworkTimeoutSecond);
         // agent.runBySubscribe();
-        LocalDateTime endTime = LocalDateTime.of(2024, 11, 22, 5, 0);
+        LocalDateTime endTime = LocalDateTime.of(2024, 11, 23, 5, 0);
         System.out.println(LocalDateTime.now().isBefore(endTime));
+
 
         while (LocalDateTime.now().isBefore(endTime)) {
             agent.executor.submit(agent::runByAsking);
-            Thread.sleep(1000);
+            // Thread.sleep(1000);
         }
 
         // Thread.sleep(15000);
         agent.executor.shutdown();
     }
-
 
 }
