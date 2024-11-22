@@ -5,6 +5,7 @@ import com.longport.quote.Candlestick;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -122,12 +123,13 @@ public class SimpleRule implements RuleStrategy {
      * @param candlesticks 时间升序（从旧到新）的最新K线数据，请传入尽量少的数据，以减少计算量
      * @
      */
-    public boolean shouldSell(Candlestick[] candlesticks, BigDecimal buyingPrice, LocalDateTime buyingTime, String symbol, BigDecimal lastPrice){
+    public boolean shouldSell(Candlestick[] candlesticks, BigDecimal buyingPrice, OffsetDateTime buyingTimeUTC, String symbol, BigDecimal lastPrice){
         BigDecimal basePrice = buyingPrice.add(gapPrice);
         boolean isProfit = lastPrice.compareTo(basePrice) > 0;
         BigDecimal highestPrice = BigDecimal.ZERO;
         for(Candlestick c : candlesticks){
-            if(c.getTimestamp().toLocalDateTime().isAfter(buyingTime)&&c.getHigh().compareTo(highestPrice)>0){
+            if(c.getTimestamp().isAfter(buyingTimeUTC)
+                    &&c.getHigh().compareTo(highestPrice)>0){
                 highestPrice = c.getHigh();
             }
         }

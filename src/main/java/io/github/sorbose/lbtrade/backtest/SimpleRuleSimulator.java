@@ -158,11 +158,11 @@ public class SimpleRuleSimulator extends AbstractSimulator {
                 LocalDateTime.now(),
                 candlesticksMap,
                 new int[]{30},
-                new BigDecimal[]{new BigDecimal("98")},
+                new BigDecimal[]{new BigDecimal("98.5")},
                 1,
                 new BigDecimal("0.1"),
-                new BigDecimal("98"),
-                new BigDecimal("99")
+                new BigDecimal("98.5"),
+                new BigDecimal("99.5")
         );
         String currentDir = Paths.get("").toAbsolutePath().toString();
         System.out.println("Current working directory: " + currentDir);

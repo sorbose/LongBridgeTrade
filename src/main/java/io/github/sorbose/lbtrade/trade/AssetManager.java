@@ -45,10 +45,6 @@ public class AssetManager {
         AssetManager assetManager = new AssetManager();
         System.out.println(assetManager.getBalanceUSD());
         StockPosition[] res= assetManager.getPositions("YINN.US", "YANG.US");
-        CompletableFuture<Void> positionsFuture = assetManager.pullStockPositions("YINN.US").thenAcceptAsync(
-                positions -> {
-                    System.out.println("positions = " + positions);
-                });
-        for(long i=0;i<1e10;i++);
+        assetManager.getBalanceUSD();
     }
 }

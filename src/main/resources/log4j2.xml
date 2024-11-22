@@ -16,7 +16,7 @@
     <!-- Loggers 定义日志记录器 -->
     <Loggers>
         <!-- 根日志记录器 -->
-        <Root level="debug">
+        <Root level="info">
             <AppenderRef ref="Console"/>
 <!--            <AppenderRef ref="File"/>-->
         </Root>

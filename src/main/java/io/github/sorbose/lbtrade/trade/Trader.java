@@ -9,6 +9,9 @@ import org.apache.logging.log4j.Logger;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.util.Objects;
 import java.util.concurrent.*;
 
 public class Trader {
@@ -20,12 +23,13 @@ public class Trader {
     public final int timeoutSecond;
     public final BigDecimal cashBuyAvailableRatio;
     public final BigDecimal marginBuyAvailableRatio;
-    public Trader(int expireSecond, int timeoutSecond, BigDecimal cashBuyAvailableRatio, BigDecimal marginBuyAvailableRatio) {
+    public final BigDecimal minRemainFinanceAmount;
+    public Trader(int expireSecond, int timeoutSecond, BigDecimal cashBuyAvailableRatio, BigDecimal marginBuyAvailableRatio, BigDecimal minRemainFinanceAmount) {
         this.expireSecond = expireSecond;
         this.timeoutSecond = timeoutSecond;
         this.cashBuyAvailableRatio = cashBuyAvailableRatio;
         this.marginBuyAvailableRatio = marginBuyAvailableRatio;
-
+        this.minRemainFinanceAmount=minRemainFinanceAmount;
     }
     public static void handleException(Exception e, String msg){
         if (e instanceof OpenApiException){
@@ -36,7 +40,7 @@ public class Trader {
         }
     }
 
-    private String submitOrderLOReally(String symbol, BigDecimal quantity, BigDecimal price, OrderSide side) throws Exception {
+    private String submitOrderLOReally(String symbol, BigDecimal quantity, BigDecimal price, OrderSide side) throws OpenApiException, ExecutionException, InterruptedException, TimeoutException {
         SubmitOrderOptions orderOption = new SubmitOrderOptions(symbol, OrderType.LO, side, quantity, TimeInForceType.GoodTilCanceled);
         orderOption.setSubmittedPrice(price);
         orderOption.setOutsideRth(OutsideRTH.AnyTime);
@@ -44,9 +48,26 @@ public class Trader {
         scheduleOrderCancellation(response.getOrderId());
         return response.getOrderId();
     }
-    public String submitOrderLO(String symbol, int quantity, BigDecimal price, OrderSide side) throws Exception {
+    public String submitOrderLO(String symbol, int quantity, BigDecimal price, OrderSide side) throws OpenApiException, ExecutionException, InterruptedException, TimeoutException {
         price=price.setScale(2, RoundingMode.HALF_EVEN);
         return submitOrderLOReally(symbol, BigDecimal.valueOf(quantity), price, side);
+    }
+
+    public CompletableFuture<Order[]> pullHistoryFilledBuyOrders(String symbol) throws OpenApiException, ExecutionException, InterruptedException, TimeoutException {
+        GetTodayOrdersOptions params = new GetTodayOrdersOptions();
+        params.setSymbol(symbol);
+        params.setStatus(new OrderStatus[]{OrderStatus.Filled});
+        params.setSide(OrderSide.Buy);
+        return context.getTodayOrders(params);
+    }
+
+    public CompletableFuture<OffsetDateTime> pullLatestFilledBuyOrderTime(String symbol) throws OpenApiException, ExecutionException, InterruptedException, TimeoutException {
+        return pullHistoryFilledBuyOrders(symbol).thenApply(orders -> {
+            if (orders.length == 0) {
+                return OffsetDateTime.MIN;
+            }
+            return orders[0].getUpdatedAt();
+        });
     }
 
     public CompletableFuture<String> submitOrderLOFuture(String symbol, int quantity, BigDecimal price, OrderSide side) {
@@ -55,9 +76,10 @@ public class Trader {
         orderOption.setSubmittedPrice(submittedPrice);
         orderOption.setOutsideRth(OutsideRTH.AnyTime);
         try {
-            return context.submitOrder(orderOption).thenApplyAsync(response -> {
+            return context.submitOrder(orderOption).thenApply(response -> {
                 try {
                     logger.info("Order " + response.getOrderId() + "symbol: " + symbol + " quantity: " + quantity + " price: " + submittedPrice + " side: " + side + " was submitted.");
+                    scheduleOrderCancellation(response.getOrderId());
                     return response.getOrderId();
                 } catch (Exception e) {
                     handleException(e, "Failed to schedule order cancellation.");
@@ -101,9 +123,14 @@ public class Trader {
                 .get(timeoutSecond, TimeUnit.SECONDS);
     }
 
-    public CompletableFuture<EstimateMaxPurchaseQuantityResponse> pullEstMaxOrderQtyFuture(String symbol) throws Exception {
+
+
+    public CompletableFuture<BigDecimal> pullEstMarginMaxOrderQtyFuture(String symbol) throws OpenApiException {
         return context.getEstimateMaxPurchaseQuantity(
-                new EstimateMaxPurchaseQuantityOptions(symbol, OrderType.LO, OrderSide.Buy));
+                new EstimateMaxPurchaseQuantityOptions(symbol, OrderType.LO, OrderSide.Buy)).thenApply(
+                response -> {
+                    return response.getMarginMaxQty().multiply(marginBuyAvailableRatio).setScale(0, RoundingMode.FLOOR);
+                });
     }
 
     // TODO: 换成Asset来完成
@@ -123,7 +150,8 @@ public class Trader {
     }
 
     public static void main(String[] args) {
-        Trader trader = new Trader(70,30, new BigDecimal("0.015"), new BigDecimal("0.015"));
+        Trader trader = new Trader(70,30, new BigDecimal("0.015"),
+                new BigDecimal("0.015"), new BigDecimal("408000"));
         try {
             EstimateMaxPurchaseQuantityResponse res= trader.pullEstMaxOrderQty("TSLA.US");
             System.out.println(res);
