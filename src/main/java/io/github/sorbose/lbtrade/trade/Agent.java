@@ -180,7 +180,7 @@ public class Agent {
                 logger.debug("candlesticks length: {}", candlesticks.length);
                 OffsetDateTime latestCandlestickTime=candlesticks[candlesticks.length-1].getTimestamp();
                 Duration duration= Duration.between(latestCandlestickTime, OffsetDateTime.now(ZoneId.of("UTC")));
-                if(duration.toMinutes()>3){
+                if(duration.toMinutes()>2){
                     logger.warn("Delayed candlesticks time (UTC+0) {}, duration {} min", latestCandlestickTime, duration.toMinutes());
                 }
                 AtomicBoolean lock = getLockForProduct(symbol);
@@ -213,17 +213,17 @@ public class Agent {
     public static void main(String[] args) throws InterruptedException {
         String[] symbols = new String[]{"TSLL.US", "TSLQ.US"};
         BigDecimal cashBuyAvailableRatio = new BigDecimal("0.015");
-        BigDecimal marginBuyAvailableRatio = new BigDecimal("0.005");
+        BigDecimal marginBuyAvailableRatio = new BigDecimal("0.015");
         BigDecimal minRemainFinanceAmount = new BigDecimal("408000");
-        int[] observationMinute=new int[]{25, 5};
-        BigDecimal[] percentage=new BigDecimal[]{new BigDecimal("98.75"), new BigDecimal("99.25")};
-        int[] higherThanExpected = new int[]{-1, 1};
-        int conditionNum=2;
+        int[] observationMinute=new int[]{1};
+        BigDecimal[] percentage=new BigDecimal[]{new BigDecimal("99")};
+        int[] higherThanExpected = new int[]{-1};
+        int conditionNum=1;
         BigDecimal simpleRuleProfitGapPrice=new BigDecimal("0.1");
         BigDecimal simpleRuleWinPercentage=new BigDecimal("99.5");
         BigDecimal simpleRuleLosePercentage=new BigDecimal("99.5");
-        BigDecimal buyOrderPriceGapTenThousandPercent=new BigDecimal("6");
-        BigDecimal sellOrderPriceGapTenThousandPercent=new BigDecimal("6");
+        BigDecimal buyOrderPriceGapTenThousandPercent=new BigDecimal("7");
+        BigDecimal sellOrderPriceGapTenThousandPercent=new BigDecimal("7");
         BigDecimal minBuyQuantity=new BigDecimal("3");
         int submittedOrderExpireTimeSec=70;
         int getByNetworkTimeoutSecond=30;

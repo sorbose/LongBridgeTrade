@@ -136,7 +136,7 @@ public class SimpleRuleSimulator extends AbstractSimulator {
     }
 
     public static void main(String[] args) {
-        String[] symbols = new String[]{"TSLL"};
+        String[] symbols = new String[]{"TSLQ"};
         String[] inPaths = Arrays.stream(symbols).map(s -> CandlestickLoader.symbolToPath.get(s)).toArray(String[]::new);
         CandlestickLoader candlestickLoader = new CandlestickLoader();
         HashMap<String, List<Candlestick>> candlesticksMap =
@@ -146,7 +146,7 @@ public class SimpleRuleSimulator extends AbstractSimulator {
                             System.out.println("Loading data for symbol: " + symbols[i]);
                             List<Candlestick> candlesticks = candlestickLoader.fromCsv(
                                     CandlestickLoader.symbolToPath.get(symbols[i]),
-                                    LocalDateTime.of(2024, 11, 1, 0, 0),
+                                    LocalDateTime.of(2024, 10, 30, 0, 0),
                                     LocalDateTime.now()
                             );
                             System.out.println("Loaded " + candlesticks.size() + " candlesticks for symbol: " + symbols[i]);
@@ -155,20 +155,20 @@ public class SimpleRuleSimulator extends AbstractSimulator {
                         (existing, replacement) -> existing,  // 处理重复键时选择现有的值
                         HashMap::new  // 使用 HashMap
                 ));
+        BigDecimal initCash = new BigDecimal("2000");
+        LocalDateTime beginTime = LocalDateTime.of(2024, 11, 11, 0, 0);
+        LocalDateTime endTime = LocalDateTime.now();
+        int[] observationMinute=new int[]{20, 1};
+        BigDecimal[] percentage=Arrays.stream(new String[]{"97","98.5"}).map(BigDecimal::new).toArray(BigDecimal[]::new);
+        int[] higherThanExpected=new int[]{-1, -1};
+        int conditionNum=1;
+        BigDecimal simpleRuleProfitGapPrice=new BigDecimal("0.1");
+        BigDecimal simpleRuleWinPercentage=new BigDecimal("99.5");
+        BigDecimal simpleRuleLosePercentage=new BigDecimal("99.5");
         SimpleRuleSimulator simulator = new SimpleRuleSimulator(
-                symbols,
-                "USD",
-                new BigDecimal(2000),
-                LocalDateTime.of(2024, 11, 15, 0, 0),
-                LocalDateTime.now(),
-                candlesticksMap,
-                new int[]{25, 5},
-                new BigDecimal[]{new BigDecimal("98.75"), new BigDecimal("99.25")},
-                new int[]{-1, 1},
-                2,
-                new BigDecimal("0.1"),
-                new BigDecimal("99.5"),
-                new BigDecimal("99.5")
+                symbols, "USD", initCash, beginTime, endTime, candlesticksMap,
+                observationMinute, percentage, higherThanExpected, conditionNum,
+                simpleRuleProfitGapPrice, simpleRuleWinPercentage, simpleRuleLosePercentage
         );
         String currentDir = Paths.get("").toAbsolutePath().toString();
         System.out.println("Current working directory: " + currentDir);
