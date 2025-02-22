@@ -3,6 +3,8 @@ package io.github.sorbose.lbtrade.backtest;
 import com.longport.Market;
 import com.longport.quote.Candlestick;
 import io.github.sorbose.lbtrade.strategy.SimpleRule;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -21,11 +23,14 @@ public class SimpleRuleSimulator extends AbstractSimulator {
     BigDecimal gapPrice;
     BigDecimal winPercentage;
     BigDecimal losePercentage;
-    private static final BigDecimal fixedBuyFee = new BigDecimal("1.01");
-    private static final BigDecimal fixedSellFee = new BigDecimal("1.01");
+    boolean stopLoss;
+    private static final BigDecimal fixedBuyFee = new BigDecimal("1.5");
+    private static final BigDecimal fixedSellFee = new BigDecimal("1.5");
+    private static final Logger logger = LogManager.getLogger(SimpleRuleSimulator.class);
+    private int tradeCount = 0;
 
     public SimpleRuleSimulator(String[] symbols, String currency, BigDecimal initCash, LocalDateTime beginTime, LocalDateTime endTime, HashMap<String, List<Candlestick>> candlesticksMap,
-                               int[] observationMinute, BigDecimal[] percentage, int[] highThanExpected, int conditionNum, BigDecimal gapPrice, BigDecimal winPercentage, BigDecimal losePercentage) {
+                               int[] observationMinute, BigDecimal[] percentage, int[] highThanExpected, int conditionNum, BigDecimal gapPrice, BigDecimal winPercentage, BigDecimal losePercentage, boolean stopLoss) {
         super(symbols, currency, initCash, beginTime, endTime, candlesticksMap);
         this.observationMinute = observationMinute;
         this.percentage = percentage;
@@ -34,16 +39,18 @@ public class SimpleRuleSimulator extends AbstractSimulator {
         this.gapPrice = gapPrice;
         this.winPercentage = winPercentage;
         this.losePercentage = losePercentage;
+        this.stopLoss = stopLoss;
     }
 
     @Override
-    protected BigDecimal getBuyFee(Market market, BigDecimal quantity, BigDecimal unitCost) {
-        return fixedBuyFee.add(quantity.multiply(unitCost).multiply(new BigDecimal("0.0012")));
+    protected BigDecimal getBuyFee(Market market, BigDecimal estTotalPrice) {
+        // 模拟时按照当前分钟的最高价买入，最低价卖出，默认均可成交，不再计算下单价和最新价之间的价格差
+        return fixedBuyFee.add(estTotalPrice.multiply(new BigDecimal("0")));
     }
 
     @Override
-    protected BigDecimal getSellFee(Market market, BigDecimal quantity, BigDecimal unitCost) {
-        return fixedSellFee.add(quantity.multiply(unitCost).multiply(new BigDecimal("0.0012")));
+    protected BigDecimal getSellFee(Market market, BigDecimal totalPrice) {
+        return fixedSellFee.add(totalPrice.multiply(new BigDecimal("0")));
     }
 
     @Override
@@ -61,11 +68,11 @@ public class SimpleRuleSimulator extends AbstractSimulator {
                 BigDecimal lastPrice = candlestick.getHigh();
                 BigDecimal buyingPrice = stockPositions.get(symbols[0]).costPrice;
                 LocalDateTime buyTime = getStockRecentBuyTime(symbols[0]);
-                boolean shouldSell = strategy.shouldSell(symbols[0], buyingPrice, buyTime, lastPrice, now);
+                boolean shouldSell = strategy.shouldSell(symbols[0], buyingPrice, buyTime, lastPrice, now, stopLoss);
                 if (shouldSell) {
                     BigDecimal quantity = stockPositions.get(symbols[0]).quantity;
                     // TODO: 模拟时卖出价格欠考虑，不应该用最高价
-                    sellAndPrint(quantity, candlestick.getClose(),
+                    sellAndPrint(quantity, candlestick.getLow(),
                              now, buyingPrice);
                     continue;
                 }
@@ -73,24 +80,17 @@ public class SimpleRuleSimulator extends AbstractSimulator {
             BigDecimal lastPrice = candlestick.getLow();
             boolean shouldBuy = strategy.shouldBuy(symbols[0], lastPrice, now);
             if (shouldBuy) {
-                BigDecimal quantity = cash.divide(lastPrice, 0, RoundingMode.DOWN);
+                BigDecimal quantity = cash.subtract(getBuyFee(Market.US, cash)).
+                        divide(lastPrice, 0, RoundingMode.DOWN);
                 boolean haveBought = buy(symbols[0], quantity,
-                        candlestick.getClose(), now);
-                if (haveBought) {
-                    System.out.println("Buy " + symbols[0] + " at " + lastPrice + " with quantity " + quantity
-                            + " at " + now);
-                    System.out.println("Balance: " + cash);
-                }
+                        candlestick.getHigh(), now);
             }
         }
         sellAndPrint(stockPositions.get(symbols[0]).quantity, candlesticks.get(candlesticks.size() - 1).getClose(), candlesticks.get(candlesticks.size() - 1).getTimestamp().toLocalDateTime(), stockPositions.get(symbols[0]).costPrice);
     }
 
     private void sellAndPrint(BigDecimal quantity, BigDecimal lastPrice, LocalDateTime now, BigDecimal buyingPrice) {
-        sell(symbols[0], quantity, lastPrice, now);
-        System.out.println("Sell " + symbols[0] + " at " + lastPrice + " at " + now +
-                " with profit " + (lastPrice.subtract(buyingPrice)).multiply(quantity));
-        System.out.println("Balance: " + cash);
+        sell(symbols[0], quantity, lastPrice, now, buyingPrice);
     }
 
     private boolean buy(String symbol, BigDecimal quantity, BigDecimal lastPrice, LocalDateTime now) {
@@ -98,29 +98,29 @@ public class SimpleRuleSimulator extends AbstractSimulator {
             return false;
         }
         MyStockPosition stockPosition = stockPositions.get(symbol);
-        BigDecimal cost = quantity.multiply(lastPrice);
-        BigDecimal buyFee = getBuyFee(Market.US, quantity, lastPrice);
-        if (cash.compareTo(cost.add(buyFee)) < 0) {
-            return false;
-        }
+        BigDecimal estCost = quantity.multiply(lastPrice);
+        BigDecimal buyFee = getBuyFee(Market.US, estCost);
+        BigDecimal realQuantity = cash.subtract(buyFee).divide(lastPrice, 0, RoundingMode.DOWN);
+        BigDecimal cost = realQuantity.multiply(lastPrice);
         cash = cash.subtract(cost).subtract(buyFee);
         stockPosition.costPrice = stockPosition.costPrice.multiply(stockPosition.quantity)
-                .add(lastPrice.multiply(quantity)).divide(stockPosition.quantity.add(quantity), 3, RoundingMode.HALF_UP);
-        stockPosition.quantity = stockPosition.quantity.add(quantity);
-
-        tradeRecords.add(new TradeRecord(now, lastPrice, quantity, TradeRecord.Direction.BUY, symbol));
+                .add(lastPrice.multiply(realQuantity)).divide(stockPosition.quantity.add(realQuantity), 3, RoundingMode.HALF_UP);
+        stockPosition.quantity = stockPosition.quantity.add(realQuantity);
+        tradeRecords.add(new TradeRecord(now, lastPrice, realQuantity, TradeRecord.Direction.BUY, symbol));
+        logger.info("\n Buy " + symbol + " at " + lastPrice + " quantity "+ realQuantity + " at " + now);
+        logger.info("Balance After Buying: " + cash);
+        tradeCount++;
         return true;
     }
 
-    private boolean sell(String symbol, BigDecimal quantity, BigDecimal lastPrice, LocalDateTime localDateTime) {
-        if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
-            return false;
-        }
+    private boolean sell(String symbol, BigDecimal quantity, BigDecimal lastPrice,
+                         LocalDateTime localDateTime, BigDecimal buyingPrice) {
         MyStockPosition stockPosition = stockPositions.get(symbol);
-        if (stockPosition.quantity.compareTo(quantity) < 0) {
+        if (quantity.compareTo(BigDecimal.ZERO) <= 0 ||
+                stockPosition.quantity.compareTo(quantity) < 0) {
             return false;
         }
-        if (quantity.compareTo(stockPosition.quantity) == 0) {
+        if (stockPosition.quantity.compareTo(quantity) == 0) {
             stockPosition.costPrice = BigDecimal.ZERO;
         } else {
             stockPosition.costPrice = stockPosition.costPrice.multiply(stockPosition.quantity)
@@ -129,14 +129,19 @@ public class SimpleRuleSimulator extends AbstractSimulator {
 
         stockPosition.quantity = stockPosition.quantity.subtract(quantity);
         BigDecimal sellAmount = quantity.multiply(lastPrice);
-        BigDecimal sellFee = getSellFee(Market.US, quantity, lastPrice);
+        BigDecimal sellFee = getSellFee(Market.US, sellAmount);
         cash = cash.add(sellAmount).subtract(sellFee);
         tradeRecords.add(new TradeRecord(localDateTime, lastPrice, quantity, TradeRecord.Direction.SELL, symbol));
+
+        logger.info("\n Sell " + symbols[0] + " at " + lastPrice + " at " + localDateTime +
+                " with profit " + (lastPrice.subtract(buyingPrice)).multiply(quantity));
+        logger.info("Balance: " + cash);
+        tradeCount++;
         return true;
     }
 
     public static void main(String[] args) {
-        String[] symbols = new String[]{"TSLQ"};
+        String[] symbols = new String[]{"MSTX"};
         String[] inPaths = Arrays.stream(symbols).map(s -> CandlestickLoader.symbolToPath.get(s)).toArray(String[]::new);
         CandlestickLoader candlestickLoader = new CandlestickLoader();
         HashMap<String, List<Candlestick>> candlesticksMap =
@@ -156,22 +161,24 @@ public class SimpleRuleSimulator extends AbstractSimulator {
                         HashMap::new  // 使用 HashMap
                 ));
         BigDecimal initCash = new BigDecimal("2000");
-        LocalDateTime beginTime = LocalDateTime.of(2024, 11, 11, 0, 0);
+        LocalDateTime beginTime = LocalDateTime.of(2024, 11, 18, 0, 0);
         LocalDateTime endTime = LocalDateTime.now();
-        int[] observationMinute=new int[]{20, 1};
-        BigDecimal[] percentage=Arrays.stream(new String[]{"97","98.5"}).map(BigDecimal::new).toArray(BigDecimal[]::new);
-        int[] higherThanExpected=new int[]{-1, -1};
-        int conditionNum=1;
+        int[] observationMinute=new int[]{3,1};
+        BigDecimal[] percentage=Arrays.stream(new String[]{"98","99"}).map(BigDecimal::new).toArray(BigDecimal[]::new);
+        int[] higherThanExpected=new int[]{-1,-1};
+        int conditionNum=2;
         BigDecimal simpleRuleProfitGapPrice=new BigDecimal("0.1");
-        BigDecimal simpleRuleWinPercentage=new BigDecimal("99.5");
-        BigDecimal simpleRuleLosePercentage=new BigDecimal("99.5");
+        BigDecimal simpleRuleWinPercentage=new BigDecimal("102");
+        BigDecimal simpleRuleLosePercentage=new BigDecimal("102");
+        boolean stopLoss=false;
         SimpleRuleSimulator simulator = new SimpleRuleSimulator(
                 symbols, "USD", initCash, beginTime, endTime, candlesticksMap,
                 observationMinute, percentage, higherThanExpected, conditionNum,
-                simpleRuleProfitGapPrice, simpleRuleWinPercentage, simpleRuleLosePercentage
+                simpleRuleProfitGapPrice, simpleRuleWinPercentage, simpleRuleLosePercentage, stopLoss
         );
         String currentDir = Paths.get("").toAbsolutePath().toString();
         System.out.println("Current working directory: " + currentDir);
         simulator.run();
+        System.out.println(symbols[0]+" Trade count: " + simulator.tradeCount);
     }
 }

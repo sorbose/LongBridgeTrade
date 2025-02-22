@@ -66,8 +66,8 @@ public abstract class AbstractSimulator {
         }
     }
 
-    abstract protected BigDecimal getBuyFee(Market market, BigDecimal quantity, BigDecimal unitCost);
-    abstract protected BigDecimal getSellFee(Market market, BigDecimal quantity, BigDecimal unitCost);
+    abstract protected BigDecimal getBuyFee(Market market, BigDecimal estTotalPrice);
+    abstract protected BigDecimal getSellFee(Market market, BigDecimal estTotalPrice);
     abstract public void run();
     // abstract protected void sell(String symbol, BigDecimal lastPrice, LocalDateTime localDateTime);
     protected HashMap<String, MyStockPosition> getstockPositions() {

@@ -29,6 +29,9 @@ public class CandlestickLoader {
             put("TSLQ", "data/TSLQ.US2023-12-04T0000");
             put("YANG", "data/YANG.US2023-12-04T0000");
             put("YINN", "data/YINN.US2023-12-04T0000");
+            put("MSTR", "data/MSTR.US2023-12-04T0000");
+            put("MSTX", "data/MSTX.US2023-12-04T0000");
+            put("SMST", "data/SMST.US2023-12-04T0000");
         }
     };
 

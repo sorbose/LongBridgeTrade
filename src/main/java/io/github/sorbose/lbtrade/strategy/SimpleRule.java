@@ -55,6 +55,7 @@ public class SimpleRule implements RuleStrategy {
      */
     @Override
     public boolean shouldBuy(String symbol, BigDecimal lastPrice, LocalDateTime now) {
+//        return Math.random()<0.005;
         List<Candlestick> candlesticks = candlesticksMap.get(symbol);
         int nowIndex = Collections.binarySearch(candlesticks, null, (a, b) -> a.getTimestamp().toLocalDateTime().compareTo(now));
         if (nowIndex < 0) {
@@ -70,8 +71,9 @@ public class SimpleRule implements RuleStrategy {
     }
 
     public BigDecimal getBuyBoundPrice(List<Candlestick> candlesticks, int nowIndex, int i) {
-        return candlesticks.get(nowIndex - observationMinute[i]).getHigh().
-                multiply(percentage[i]).divide(BigDecimal.valueOf(100), 3, RoundingMode.HALF_UP);
+        Candlestick nowCandlestick = candlesticks.get(nowIndex - observationMinute[i]);
+        BigDecimal avgPrice = nowCandlestick.getHigh().add(nowCandlestick.getLow()).add(nowCandlestick.getClose()).add(nowCandlestick.getOpen()).divide(BigDecimal.valueOf(4), 3, RoundingMode.HALF_UP);
+        return avgPrice.multiply(percentage[i]).divide(BigDecimal.valueOf(100), 3, RoundingMode.HALF_UP);
     }
 
     /**
@@ -103,37 +105,38 @@ public class SimpleRule implements RuleStrategy {
      * @return true表示应该卖出股票
      */
     @Override
-    public boolean shouldSell(String symbol, BigDecimal buyingPrice, LocalDateTime buyingTime, BigDecimal lastPrice, LocalDateTime now){
-        BigDecimal basePrice = buyingPrice.add(gapPrice);
-        boolean isProfit = lastPrice.compareTo(basePrice) > 0;
+    public boolean shouldSell(String symbol, BigDecimal buyingPrice, LocalDateTime buyingTime, BigDecimal lastPrice, LocalDateTime now, boolean stopLoss) {
+//        return Math.random()<0.02;
+        boolean isProfit = lastPrice.compareTo(buyingPrice.add(gapPrice)) > 0;
         List<Candlestick> candlesticks = candlesticksMap.get(symbol);
         BigDecimal highestPrice =  candlesticks.stream().filter(c->{
             LocalDateTime t=c.getTimestamp().toLocalDateTime();
             return t.isBefore(now)&& (t.isAfter(buyingTime)||t.isEqual(buyingTime));
         }).max(Comparator.comparing(Candlestick::getHigh)).get().getHigh();
 
+        int stopLossIndex = stopLoss?1:-1;  // 1表示止损，-1表示止盈
+        BigDecimal standardPrice = stopLoss?highestPrice:buyingPrice; // 止损状态下，用最高价；止盈状态下，用买入价
         // 计算盈利状态下的止损界限
-        BigDecimal profitThreshold = highestPrice.multiply(
+        BigDecimal profitThreshold = standardPrice.multiply(
                 winPercentage.divide(new BigDecimal("100"), 3, RoundingMode.HALF_UP));
         // 计算亏损状态下的止损界限
-        BigDecimal lossThreshold = highestPrice.multiply(
+        BigDecimal lossThreshold = standardPrice.multiply(
                 losePercentage.divide(new BigDecimal("100"), 3, RoundingMode.HALF_UP));
 
         // 如果是盈利状态，检查是否满足止损条件
         if (isProfit) {
-            return lastPrice.compareTo(profitThreshold) < 0;  // 如果现价低于盈利止损阈值，则卖出
+            return lastPrice.compareTo(profitThreshold)*stopLossIndex < 0;  // 如果现价低于盈利止损阈值，则卖出
         } else {
             // 如果是亏损状态，检查是否满足止损条件
-            return lastPrice.compareTo(lossThreshold) < 0;
+            return lastPrice.compareTo(lossThreshold)*stopLossIndex < 0;
         }
     }
 
     /**
      * @param candlesticks 时间升序（从旧到新）的最新K线数据，请传入尽量少的数据，以减少计算量
      */
-    public boolean shouldSell(Candlestick[] candlesticks, BigDecimal buyingPrice, OffsetDateTime buyingTimeUTC, String symbol, BigDecimal lastPrice){
-        BigDecimal basePrice = buyingPrice.add(gapPrice);
-        boolean isProfit = lastPrice.compareTo(basePrice) > 0;
+    public boolean shouldSell(Candlestick[] candlesticks, BigDecimal buyingPrice, OffsetDateTime buyingTimeUTC, String symbol, BigDecimal lastPrice, boolean stopLoss){
+        boolean isProfit = lastPrice.compareTo(buyingPrice.add(gapPrice)) > 0;
         BigDecimal highestPrice = BigDecimal.ZERO;
         for(Candlestick c : candlesticks){
             if(c.getTimestamp().isAfter(buyingTimeUTC)
@@ -141,18 +144,21 @@ public class SimpleRule implements RuleStrategy {
                 highestPrice = c.getHigh();
             }
         }
+
+        int stopLossIndex = stopLoss?1:-1;  // 1表示止损，-1表示止盈
+        BigDecimal standardPrice = stopLoss?highestPrice:buyingPrice; // 止损状态下，用最高价；止盈状态下，用买入价
         // 计算盈利状态下的止损界限
-        BigDecimal profitThreshold = highestPrice.multiply(
+        BigDecimal profitThreshold = standardPrice.multiply(
                 winPercentage.divide(new BigDecimal("100"), 3, RoundingMode.HALF_UP));
         // 计算亏损状态下的止损界限
-        BigDecimal lossThreshold = highestPrice.multiply(
+        BigDecimal lossThreshold = standardPrice.multiply(
                 losePercentage.divide(new BigDecimal("100"), 3, RoundingMode.HALF_UP));
         // 如果是盈利状态，检查是否满足止损条件
         if (isProfit) {
-            return lastPrice.compareTo(profitThreshold) < 0;  // 如果现价低于盈利止损阈值，则卖出
+            return lastPrice.compareTo(profitThreshold)*stopLossIndex < 0;  // 如果现价低于盈利止损阈值，则卖出
         } else {
             // 如果是亏损状态，检查是否满足止损条件
-            return lastPrice.compareTo(lossThreshold) < 0;
+            return lastPrice.compareTo(lossThreshold)*stopLossIndex < 0;
         }
     }
 }

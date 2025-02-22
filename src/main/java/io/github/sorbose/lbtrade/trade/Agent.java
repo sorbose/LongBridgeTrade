@@ -34,6 +34,7 @@ public class Agent {
     BigDecimal buyGapRatio;
     BigDecimal sellGapRatio;
     BigDecimal minBuyQuantity;
+    boolean stopLoss;
     ThreadPoolExecutor executor = new ThreadPoolExecutor(
             1,                // 核心线程数
             2,               // 最大线程数
@@ -64,6 +65,7 @@ public class Agent {
                  BigDecimal minRemainFinanceAmount,
                  int[] observationMinute, BigDecimal[] percentage, int[] higherThanExpected, int conditionNum,
                  BigDecimal simpleRuleProfitGapPrice, BigDecimal simpleRuleWinPercentage, BigDecimal simpleRuleLosePercentage,
+                 boolean stopLoss,
                  BigDecimal buyOrderPriceGapTenThousandPercent, BigDecimal sellOrderPriceGapTenThousandPercent,
                  BigDecimal minBuyQuantity,
                  int submittedOrderExpireTimeSec, int getByNetworkTimeoutSecond) {
@@ -141,7 +143,7 @@ public class Agent {
         if(quantity.compareTo(BigDecimal.ZERO)>0){
             OffsetDateTime buyingTimeUtc =
                     trader.pullLatestFilledBuyOrderTime(symbol).get(trader.timeoutSecond, TimeUnit.SECONDS);
-            if(strategy.shouldSell(candlesticks, buyingPrice, buyingTimeUtc, symbol, lastDone)){
+            if(strategy.shouldSell(candlesticks, buyingPrice, buyingTimeUtc, symbol, lastDone, stopLoss)){
                 logger.debug("sellIfNeeded: {} {}  {}", symbol, lastDone, buyingTimeUtc);
                 return trader.submitOrderLO(symbol, quantity.intValue(),
                         lastDone.multiply(BigDecimal.ONE.subtract(sellGapRatio)), OrderSide.Sell);
@@ -211,17 +213,18 @@ public class Agent {
 
     // IMPORTANT: 直接进行交易，真实环境请小心使用
     public static void main(String[] args) throws InterruptedException {
-        String[] symbols = new String[]{"TSLL.US", "TSLQ.US"};
+        String[] symbols = new String[]{"SMST.US", "MSTX.US"};
         BigDecimal cashBuyAvailableRatio = new BigDecimal("0.015");
         BigDecimal marginBuyAvailableRatio = new BigDecimal("0.015");
         BigDecimal minRemainFinanceAmount = new BigDecimal("408000");
-        int[] observationMinute=new int[]{1};
-        BigDecimal[] percentage=new BigDecimal[]{new BigDecimal("99")};
-        int[] higherThanExpected = new int[]{-1};
-        int conditionNum=1;
+        int[] observationMinute=new int[]{2,1};
+        BigDecimal[] percentage=Arrays.stream(new String[]{"99.25","99.5"}).map(BigDecimal::new).toArray(BigDecimal[]::new);
+        int[] higherThanExpected=new int[]{-1,-1};
+        int conditionNum=2;
         BigDecimal simpleRuleProfitGapPrice=new BigDecimal("0.1");
-        BigDecimal simpleRuleWinPercentage=new BigDecimal("99.5");
-        BigDecimal simpleRuleLosePercentage=new BigDecimal("99.5");
+        BigDecimal simpleRuleWinPercentage=new BigDecimal("102");
+        BigDecimal simpleRuleLosePercentage=new BigDecimal("102");
+        boolean stopLoss=false;
         BigDecimal buyOrderPriceGapTenThousandPercent=new BigDecimal("7");
         BigDecimal sellOrderPriceGapTenThousandPercent=new BigDecimal("7");
         BigDecimal minBuyQuantity=new BigDecimal("3");
@@ -229,12 +232,12 @@ public class Agent {
         int getByNetworkTimeoutSecond=30;
         Agent agent=new Agent(symbols, cashBuyAvailableRatio, marginBuyAvailableRatio,
                 minRemainFinanceAmount,observationMinute, percentage, higherThanExpected, conditionNum,
-                simpleRuleProfitGapPrice, simpleRuleWinPercentage, simpleRuleLosePercentage,
+                simpleRuleProfitGapPrice, simpleRuleWinPercentage, simpleRuleLosePercentage, stopLoss,
                 buyOrderPriceGapTenThousandPercent, sellOrderPriceGapTenThousandPercent,
                 minBuyQuantity,
                 submittedOrderExpireTimeSec, getByNetworkTimeoutSecond);
         // agent.runBySubscribe();
-        LocalDateTime endTime = LocalDateTime.of(2024, 11, 23, 5, 0);
+        LocalDateTime endTime = LocalDateTime.of(2024, 11, 26, 5, 0);
         System.out.println(LocalDateTime.now().isBefore(endTime));
 
 

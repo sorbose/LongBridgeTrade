@@ -67,7 +67,7 @@ public class CandlesticksFetcher {
         logger.info("start");
         CandlesticksFetcher fetcher = new CandlesticksFetcher();
         long startTime = System.currentTimeMillis();
-        fetcher.toCsv("YANG.US",
+        fetcher.toCsv("SMST.US",
                 LocalDate.of(2023, 12, 4).atStartOfDay());
         long endTime = System.currentTimeMillis();
         logger.info("end");
